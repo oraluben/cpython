@@ -1668,6 +1668,7 @@ import_find_and_load(PyThreadState *tstate, PyObject *abs_name)
     if (import_time) {
         _PyTime_t cum = _PyTime_GetPerfCounter() - t1;
 
+        // todo: verbose CDS-related time
         import_level--;
         fprintf(stderr, "import time: %9ld | %10ld | %*s%s\n",
                 (long)_PyTime_AsMicroseconds(cum - accumulated, _PyTime_ROUND_CEILING),

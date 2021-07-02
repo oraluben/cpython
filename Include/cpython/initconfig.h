@@ -162,6 +162,27 @@ typedef struct PyConfig {
     int parser_debug;
     int write_bytecode;
     int verbose;
+
+    /*
+     * Internal representation of PYCDSMODE.
+     * See `config_read_env_vars` for detail.
+     *
+     * 0: disable
+     * 1: dump name list (from PYDUMPMODULELIST)
+     * 2: dump archive from name list (PYCDSMODE=DUMP, from PYCDSLIST & PYCDSARCHIVE)
+     * 3: use archive (PYCDSMODE=SHARE, from PYCDSARCHIVE)
+     * (for debug and test only)
+     * 6 (1 << 2 | 2): create mmap archive (PYCDSMODE=DEBUG1)
+     * 7 (1 << 2 | 3): load mmap archive (PYCDSMODE=DEBUG2)
+     */
+    int cds_mode;
+
+    wchar_t *cds_name_list;
+    wchar_t *cds_archive;
+
+    /* {0, 1, 2} */
+    int cds_verbose;
+
     int quiet;
     int user_site_directory;
     int configure_c_stdio;

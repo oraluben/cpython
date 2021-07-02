@@ -1043,6 +1043,60 @@ sys_settrace(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
+#include "sharedheap.h"
+
+/*[clinic input]
+sys.shm_getobj
+
+TBD
+[clinic start generated code]*/
+
+static PyObject *
+sys_shm_getobj_impl(PyObject *module)
+/*[clinic end generated code: output=06fdfcbcf53cc4ee input=c724601d39d4376f]*/
+{
+    return _PyMem_SharedGetObj();
+}
+
+/*[clinic input]
+sys.shm_move_in
+
+    arg: object
+    /
+
+TBD
+[clinic start generated code]*/
+
+static PyObject *
+sys_shm_move_in(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=13056f8010423627 input=194e8a5d9af07543]*/
+{
+    if (!Py_TYPE(arg)->tp_move_in) {
+        _PyArg_BadArgument("move_in", "argument", "serializable", arg);
+        return NULL;
+    }
+
+    _PyMem_SharedMoveIn(arg);
+
+    return Py_None;
+}
+
+/*[clinic input]
+sys.shm_trace_import
+
+    arg: object
+    /
+
+TBD
+[clinic start generated code]*/
+
+static PyObject *
+sys_shm_trace_import(PyObject *module, PyObject *arg)
+/*[clinic end generated code: output=e85a32f9f88785fb input=81f3bc571c518271]*/
+{
+    return _PyMem_TraceImport(arg);
+}
+
 PyDoc_STRVAR(settrace_doc,
 "settrace(function)\n\
 \n\
@@ -2022,6 +2076,9 @@ static PyMethodDef sys_methods[] = {
     SYS_GET_ASYNCGEN_HOOKS_METHODDEF
     SYS_GETANDROIDAPILEVEL_METHODDEF
     SYS_UNRAISABLEHOOK_METHODDEF
+    SYS_SHM_MOVE_IN_METHODDEF
+    SYS_SHM_GETOBJ_METHODDEF
+    SYS_SHM_TRACE_IMPORT_METHODDEF
     {NULL,              NULL}           /* sentinel */
 };
 
@@ -2514,6 +2571,8 @@ static PyStructSequence_Field flags_fields[] = {
     {"dev_mode",                "-X dev"},
     {"utf8_mode",               "-X utf8"},
     {"warn_default_encoding",   "-X warn_default_encoding"},
+    {"cds_mode",                "PYCDSMODE"},
+    {"cds_verbose",             "PYCDSVERBOSE"},
     {0}
 };
 
@@ -2521,7 +2580,7 @@ static PyStructSequence_Desc flags_desc = {
     "sys.flags",        /* name */
     flags__doc__,       /* doc */
     flags_fields,       /* fields */
-    16
+    18
 };
 
 static int
@@ -2561,6 +2620,8 @@ set_flags_from_config(PyInterpreterState *interp, PyObject *flags)
     SetFlagObj(PyBool_FromLong(config->dev_mode));
     SetFlag(preconfig->utf8_mode);
     SetFlag(config->warn_default_encoding);
+    SetFlag(config->cds_mode);
+    SetFlag(config->cds_verbose);
 #undef SetFlagObj
 #undef SetFlag
     return 0;

@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 
+#include "sharedheap.h"
 
 /* Defined in tracemalloc.c */
 extern void _PyMem_DumpTraceback(int fd, const void *ptr);
@@ -124,6 +125,7 @@ _PyMem_RawRealloc(void *ctx, void *ptr, size_t size)
 static void
 _PyMem_RawFree(void *ctx, void *ptr)
 {
+    if (_PyMem_IsShared(ptr)) return;
     free(ptr);
 }
 
@@ -638,6 +640,7 @@ PyMem_Realloc(void *ptr, size_t new_size)
 void
 PyMem_Free(void *ptr)
 {
+    if (_PyMem_IsShared(ptr)) return;
     _PyMem.free(_PyMem.ctx, ptr);
 }
 
@@ -718,6 +721,7 @@ PyObject_Realloc(void *ptr, size_t new_size)
 void
 PyObject_Free(void *ptr)
 {
+    if (_PyMem_IsShared(ptr)) return;
     _PyObject.free(_PyObject.ctx, ptr);
 }
 

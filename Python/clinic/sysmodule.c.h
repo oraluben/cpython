@@ -241,6 +241,42 @@ exit:
     return return_value;
 }
 
+PyDoc_STRVAR(sys_shm_getobj__doc__,
+"shm_getobj($module, /)\n"
+"--\n"
+"\n"
+"TBD");
+
+#define SYS_SHM_GETOBJ_METHODDEF    \
+    {"shm_getobj", (PyCFunction)sys_shm_getobj, METH_NOARGS, sys_shm_getobj__doc__},
+
+static PyObject *
+sys_shm_getobj_impl(PyObject *module);
+
+static PyObject *
+sys_shm_getobj(PyObject *module, PyObject *Py_UNUSED(ignored))
+{
+    return sys_shm_getobj_impl(module);
+}
+
+PyDoc_STRVAR(sys_shm_move_in__doc__,
+"shm_move_in($module, arg, /)\n"
+"--\n"
+"\n"
+"TBD");
+
+#define SYS_SHM_MOVE_IN_METHODDEF    \
+    {"shm_move_in", (PyCFunction)sys_shm_move_in, METH_O, sys_shm_move_in__doc__},
+
+PyDoc_STRVAR(sys_shm_trace_import__doc__,
+"shm_trace_import($module, arg, /)\n"
+"--\n"
+"\n"
+"TBD");
+
+#define SYS_SHM_TRACE_IMPORT_METHODDEF    \
+    {"shm_trace_import", (PyCFunction)sys_shm_trace_import, METH_O, sys_shm_trace_import__doc__},
+
 PyDoc_STRVAR(sys_gettrace__doc__,
 "gettrace($module, /)\n"
 "--\n"
@@ -992,4 +1028,4 @@ sys_getandroidapilevel(PyObject *module, PyObject *Py_UNUSED(ignored))
 #ifndef SYS_GETANDROIDAPILEVEL_METHODDEF
     #define SYS_GETANDROIDAPILEVEL_METHODDEF
 #endif /* !defined(SYS_GETANDROIDAPILEVEL_METHODDEF) */
-/*[clinic end generated code: output=855fc93b2347710b input=a9049054013a1b77]*/
+/*[clinic end generated code: output=dbe8d2b0d559aa2a input=a9049054013a1b77]*/

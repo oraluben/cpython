@@ -35,6 +35,8 @@
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include <stddef.h>               // offsetof()
 
+#include "sharedheap.h"
+
 /* Object used as dummy key to fill deleted entries */
 static PyObject _dummy_struct;
 
@@ -975,6 +977,71 @@ make_new_set(PyTypeObject *type, PyObject *iterable)
     }
 
     return (PyObject *)so;
+}
+
+typedef struct _heaparchivedsetitem {
+    PyObject *item;
+    struct _heaparchivedsetitem *next;
+} HeapArchivedSetItem;
+typedef struct _heaparchivedset {
+    HeapArchivedSetItem *head;
+} HeapArchivedSet;
+
+void
+_PyFrozenSet_MoveIn(PyObject *src0, PyObject **target, void *ctx,
+                    void *(*alloc)(size_t))
+{
+    assert(PyAnySet_CheckExact(src0));
+    PySetObject *from_set = (PySetObject *)src0;
+    assert(!from_set->weakreflist);
+
+    Py_ssize_t pos = 0;
+    setentry *entry;
+
+    HeapArchivedSetItem *head = NULL, *prev, *cur;
+    while (set_next(from_set, &pos, &entry)) {
+        prev = cur;
+        cur = alloc(sizeof(HeapArchivedSetItem));
+        if (head == NULL) {
+            head = cur;
+        }
+        else if (prev != NULL) {
+            prev->next = cur;
+        }
+
+        move_in(entry->key, &cur->item, ctx, alloc);
+    }
+
+    HeapArchivedSet *archived_set = alloc(sizeof(HeapArchivedSet));
+
+    archived_set->head = head;
+
+    MoveInItem *item = malloc(sizeof(MoveInItem));
+
+    item->archive_addr_to_patch = target;
+    item->obj = archived_set;
+    item->ty = &PyFrozenSet_Type;
+    item->next = ((MoveInContext *)ctx)->header;
+
+    ((MoveInContext *)ctx)->size++;
+    ((MoveInContext *)ctx)->header = item;
+
+    *target = NULL;
+}
+
+PyObject *
+_PyFrozenSet_Patch(void *p, long shift)
+{
+    PyObject *set = make_new_set(&PyFrozenSet_Type, NULL);
+
+    HeapArchivedSet *archived_set = (HeapArchivedSet *)p;
+    HeapArchivedSetItem *item = archived_set->head;
+    while (item != NULL) {
+        patch_pyobject(&item->item, shift, false);
+        PySet_Add(set, item->item);
+        item = item->next;
+    }
+    return set;
 }
 
 static PyObject *
@@ -2234,6 +2301,8 @@ PyTypeObject PyFrozenSet_Type = {
     frozenset_new,                      /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
     .tp_vectorcall = frozenset_vectorcall,
+    .tp_move_in = 1, // should not be reached
+    .tp_patch = 1,
 };
 
 

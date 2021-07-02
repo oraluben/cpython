@@ -677,6 +677,38 @@ tupletraverse(PyTupleObject *o, visitproc visit, void *arg)
     return 0;
 }
 
+#include "sharedheap.h"
+
+void
+_PyTuple_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
+{
+    if (!PyTuple_CheckExact(src0)) {
+        PyErr_BadInternalCall();
+        return;
+    }
+    PyTupleObject *fromOp = (PyTupleObject *)src0;
+    Py_ssize_t sz = Py_SIZE(fromOp);
+    Py_ssize_t bytes = _PyObject_VAR_SIZE(&PyTuple_Type, sz);
+    PyTupleObject *op = (PyTupleObject *)alloc(bytes);
+    (void)PyObject_INIT_VAR(op, &PyTuple_Type, sz);
+    for (Py_ssize_t i = 0; i < sz; i++) {
+        PyObject *elem = fromOp->ob_item[i];
+        move_in(elem, &op->ob_item[i], ctx, alloc);
+    }
+    *target = (PyObject *)op;
+}
+
+PyObject *
+_PyTuple_Patch(void *p, long shift)
+{
+    PyTupleObject *op = *((PyTupleObject **)p);
+    if (shift)
+        Py_SET_TYPE(op, &PyTuple_Type);
+    for (Py_ssize_t i = Py_SIZE(op); --i >= 0;)
+        patch_pyobject(&op->ob_item[i], shift, false);
+    return NULL;
+}
+
 static PyObject *
 tuplerichcompare(PyObject *v, PyObject *w, int op)
 {
@@ -954,6 +986,8 @@ PyTypeObject PyTuple_Type = {
     tuple_new,                                  /* tp_new */
     PyObject_GC_Del,                            /* tp_free */
     .tp_vectorcall = tuple_vectorcall,
+    .tp_move_in = _PyTuple_MoveIn,
+    .tp_patch = _PyTuple_Patch,
 };
 
 /* The following function breaks the notion that tuples are immutable:

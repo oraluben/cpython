@@ -227,6 +227,16 @@ PyFloat_FromString(PyObject *v)
     return result;
 }
 
+void
+_PyFloat_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
+{
+    PyFloatObject *op = alloc(_PyObject_SIZE(&PyFloat_Type));
+    PyObject_INIT(op, &PyFloat_Type);
+
+    op->ob_fval = ((PyFloatObject *) src0)->ob_fval;
+    *target = (PyObject *) op;
+}
+
 static void
 float_dealloc(PyFloatObject *op)
 {
@@ -1966,6 +1976,7 @@ PyTypeObject PyFloat_Type = {
     0,                                          /* tp_alloc */
     float_new,                                  /* tp_new */
     .tp_vectorcall = (vectorcallfunc)float_vectorcall,
+    .tp_move_in = _PyFloat_MoveIn,
 };
 
 void

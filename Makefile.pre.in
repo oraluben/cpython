@@ -292,6 +292,7 @@ MODULE_OBJS=	\
 		Modules/config.o \
 		Modules/getpath.o \
 		Modules/main.o \
+        Modules/sharedheap.o \
 		Modules/gcmodule.o
 
 IO_H=		Modules/_io/_iomodule.h
@@ -1185,6 +1186,7 @@ PYTHON_HEADERS= \
 		$(srcdir)/Include/pythread.h \
 		$(srcdir)/Include/rangeobject.h \
 		$(srcdir)/Include/setobject.h \
+		$(srcdir)/Include/sharedheap.h \
 		$(srcdir)/Include/sliceobject.h \
 		$(srcdir)/Include/structmember.h \
 		$(srcdir)/Include/structseq.h \

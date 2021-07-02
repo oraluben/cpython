@@ -270,6 +270,10 @@ struct _typeobject {
 
     destructor tp_finalize;
     vectorcallfunc tp_vectorcall;
+
+    /* CDS fields will change size of `builtins.type`, suppress warning in _warnings.c */
+    archivemoveinfunc tp_move_in;
+    archivepatchfunc tp_patch;
 };
 
 /* The *real* layout of a type object when allocated on the heap */

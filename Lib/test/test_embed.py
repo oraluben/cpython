@@ -417,6 +417,7 @@ class InitConfigTests(EmbeddingTestsMixin, unittest.TestCase):
         'parser_debug': 0,
         'write_bytecode': 1,
         'verbose': 0,
+        'cds_verbose': 0,
         'quiet': 0,
         'user_site_directory': 1,
         'configure_c_stdio': 0,
@@ -490,6 +491,7 @@ class InitConfigTests(EmbeddingTestsMixin, unittest.TestCase):
         ('Py_QuietFlag', 'quiet'),
         ('Py_UnbufferedStdioFlag', 'buffered_stdio', True),
         ('Py_VerboseFlag', 'verbose'),
+        ('Py_CDSVerboseFlag', 'cds_verbose'),
     ]
     if MS_WINDOWS:
         COPY_GLOBAL_PRE_CONFIG.extend((
@@ -790,6 +792,7 @@ class InitConfigTests(EmbeddingTestsMixin, unittest.TestCase):
             'optimization_level': 2,
             'write_bytecode': 0,
             'verbose': 1,
+            'cds_verbose': 1,
             'quiet': 1,
             'buffered_stdio': 0,
 
@@ -846,6 +849,7 @@ class InitConfigTests(EmbeddingTestsMixin, unittest.TestCase):
             'optimization_level': 2,
             'write_bytecode': 0,
             'verbose': 1,
+            'cds_verbose': 1,
             'quiet': 1,
             'configure_c_stdio': 1,
             'buffered_stdio': 0,
@@ -879,6 +883,7 @@ class InitConfigTests(EmbeddingTestsMixin, unittest.TestCase):
             'pycache_prefix': 'env_pycache_prefix',
             'write_bytecode': 0,
             'verbose': 1,
+            'cds_verbose': 1,
             'buffered_stdio': 0,
             'stdio_encoding': 'iso8859-1',
             'stdio_errors': 'replace',
@@ -909,6 +914,7 @@ class InitConfigTests(EmbeddingTestsMixin, unittest.TestCase):
             'pycache_prefix': 'env_pycache_prefix',
             'write_bytecode': 0,
             'verbose': 1,
+            'cds_verbose': 1,
             'buffered_stdio': 0,
             'stdio_encoding': 'iso8859-1',
             'stdio_errors': 'replace',

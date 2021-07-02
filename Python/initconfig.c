@@ -172,6 +172,7 @@ int Py_NoUserSiteDirectory = 0; /* for -s and site.py */
 int Py_UnbufferedStdioFlag = 0; /* Unbuffered binary std{in,out,err} */
 int Py_HashRandomizationFlag = 0; /* for -R and PYTHONHASHSEED */
 int Py_IsolatedFlag = 0; /* for -I, isolate from user's env */
+int Py_CDSVerboseFlag = 0;
 #ifdef MS_WINDOWS
 int Py_LegacyWindowsFSEncodingFlag = 0; /* Uses mbcs instead of utf-8 */
 int Py_LegacyWindowsStdioFlag = 0; /* Uses FileIO instead of WindowsConsoleIO */
@@ -217,6 +218,7 @@ _Py_GetGlobalVariablesAsDict(void)
     SET_ITEM_INT(Py_UTF8Mode);
     SET_ITEM_INT(Py_DebugFlag);
     SET_ITEM_INT(Py_VerboseFlag);
+    SET_ITEM_INT(Py_CDSVerboseFlag);
     SET_ITEM_INT(Py_QuietFlag);
     SET_ITEM_INT(Py_InteractiveFlag);
     SET_ITEM_INT(Py_InspectFlag);
@@ -717,6 +719,7 @@ _PyConfig_InitCompatConfig(PyConfig *config)
     config->parser_debug= -1;
     config->write_bytecode = -1;
     config->verbose = -1;
+    config->cds_verbose = -1;
     config->quiet = -1;
     config->user_site_directory = -1;
     config->configure_c_stdio = 0;
@@ -747,6 +750,7 @@ config_init_defaults(PyConfig *config)
     config->parser_debug= 0;
     config->write_bytecode = 1;
     config->verbose = 0;
+    config->cds_verbose = 0;
     config->quiet = 0;
     config->user_site_directory = 1;
     config->buffered_stdio = 1;
@@ -899,6 +903,11 @@ _PyConfig_Copy(PyConfig *config, const PyConfig *config2)
     COPY_ATTR(dump_refs_file);
     COPY_ATTR(malloc_stats);
 
+    COPY_ATTR(cds_mode);
+    COPY_ATTR(cds_verbose);
+    COPY_WSTR_ATTR(cds_archive);
+    COPY_WSTR_ATTR(cds_name_list);
+
     COPY_WSTR_ATTR(pycache_prefix);
     COPY_WSTR_ATTR(pythonpath_env);
     COPY_WSTR_ATTR(home);
@@ -1034,6 +1043,7 @@ _PyConfig_AsDict(const PyConfig *config)
     SET_ITEM_INT(parser_debug);
     SET_ITEM_INT(write_bytecode);
     SET_ITEM_INT(verbose);
+    SET_ITEM_INT(cds_verbose);
     SET_ITEM_INT(quiet);
     SET_ITEM_INT(user_site_directory);
     SET_ITEM_INT(configure_c_stdio);
@@ -1421,6 +1431,7 @@ config_get_global_vars(PyConfig *config)
     COPY_FLAG(parser_debug, Py_DebugFlag);
     COPY_FLAG(verbose, Py_VerboseFlag);
     COPY_FLAG(quiet, Py_QuietFlag);
+    COPY_FLAG(cds_verbose, Py_VerboseFlag);
 #ifdef MS_WINDOWS
     COPY_FLAG(legacy_windows_stdio, Py_LegacyWindowsStdioFlag);
 #endif
@@ -1458,6 +1469,7 @@ config_set_global_vars(const PyConfig *config)
     COPY_FLAG(parser_debug, Py_DebugFlag);
     COPY_FLAG(verbose, Py_VerboseFlag);
     COPY_FLAG(quiet, Py_QuietFlag);
+    COPY_FLAG(cds_verbose, Py_CDSVerboseFlag);
 #ifdef MS_WINDOWS
     COPY_FLAG(legacy_windows_stdio, Py_LegacyWindowsStdioFlag);
 #endif
@@ -1684,6 +1696,64 @@ config_read_env_vars(PyConfig *config)
     /* Get environment variables */
     _Py_get_env_flag(use_env, &config->parser_debug, "PYTHONDEBUG");
     _Py_get_env_flag(use_env, &config->verbose, "PYTHONVERBOSE");
+
+    _Py_get_env_flag(use_env, &config->cds_verbose, "PYCDSVERBOSE");
+    wchar_t *cds_mode_env = NULL;
+    status =
+        CONFIG_GET_ENV_DUP(config, &cds_mode_env, L"PYCDSMODE", "PYCDSMODE");
+    config->cds_archive = NULL;
+    config->cds_name_list = NULL;
+    if (_PyStatus_EXCEPTION(status)) {
+        return status;
+    }
+    else if (cds_mode_env != NULL) {  // if PYCDSMODE is explicitly given
+        if (wcscmp(cds_mode_env, L"DUMP") == 0) {
+            config->cds_mode = 2;
+        }
+        else if (wcscmp(cds_mode_env, L"SHARE") == 0) {
+            config->cds_mode = 3;
+        }
+        else if (wcscmp(cds_mode_env, L"DEBUG1") == 0) {
+            config->cds_mode = 6;
+        }
+        else if (wcscmp(cds_mode_env, L"DEBUG2") == 0) {
+            config->cds_mode = 7;
+        }
+    }
+    else {  // if we only dump module list
+        // reuse cds_mode_env for PYDUMPMODULELIST
+        status = CONFIG_GET_ENV_DUP(config, &cds_mode_env,
+                                    L"PYDUMPMODULELIST", "PYDUMPMODULELIST");
+        if (_PyStatus_EXCEPTION(status)) {
+            return status;
+        }
+        else if (cds_mode_env != NULL && wcslen(cds_mode_env) > 0) {
+            // if PYDUMPMODULELIST is given, we only dump module list
+            config->cds_mode = 1;
+            config->cds_name_list = cds_mode_env;
+        }
+        else {
+            config->cds_mode = 0;
+        }
+    }
+    if (config->cds_mode >= 2) {  // handle PYCDS* envs
+        if (config->cds_mode == 2) {
+            // todo: check this python does not run any command/file.
+            status = CONFIG_GET_ENV_DUP(config, &config->cds_name_list,
+                                        L"PYCDSLIST", "PYCDSLIST");
+            if (_PyStatus_EXCEPTION(status)) {
+                return status;
+            }
+        }
+        if (config->cds_mode >= 2) {
+            status = CONFIG_GET_ENV_DUP(config, &config->cds_archive,
+                                        L"PYCDSARCHIVE", "PYCDSARCHIVE");
+            if (_PyStatus_EXCEPTION(status)) {
+                return status;
+            }
+        }
+    }
+
     _Py_get_env_flag(use_env, &config->optimization_level, "PYTHONOPTIMIZE");
     _Py_get_env_flag(use_env, &config->inspect, "PYTHONINSPECT");
 

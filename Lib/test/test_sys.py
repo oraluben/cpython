@@ -594,7 +594,7 @@ class SysModuleTest(unittest.TestCase):
                  "dont_write_bytecode", "no_user_site", "no_site",
                  "ignore_environment", "verbose", "bytes_warning", "quiet",
                  "hash_randomization", "isolated", "dev_mode", "utf8_mode",
-                 "warn_default_encoding")
+                 "warn_default_encoding", "cds_mode", "cds_verbose")
         for attr in attrs:
             self.assertTrue(hasattr(sys.flags, attr), attr)
             attr_type = bool if attr == "dev_mode" else int
@@ -1407,7 +1407,7 @@ class SizeofTest(unittest.TestCase):
         check((1,2,3), vsize('') + 3*self.P)
         # type
         # static type: PyTypeObject
-        fmt = 'P2nPI13Pl4Pn9Pn11PIPP'
+        fmt = 'P2nPI13Pl4Pn9Pn11PIPPPP'
         s = vsize(fmt)
         check(int, s)
         # class

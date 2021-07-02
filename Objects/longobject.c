@@ -113,7 +113,7 @@ long_normalize(PyLongObject *v)
     ((PY_SSIZE_T_MAX - offsetof(PyLongObject, ob_digit))/sizeof(digit))
 
 PyLongObject *
-_PyLong_New(Py_ssize_t size)
+_PyLong_New0(Py_ssize_t size, void *(*alloc)(size_t))
 {
     PyLongObject *result;
     if (size > (Py_ssize_t)MAX_LONG_DIGITS) {
@@ -129,8 +129,8 @@ _PyLong_New(Py_ssize_t size)
        sizeof(PyVarObject) instead of the offsetof, but this risks being
        incorrect in the presence of padding between the PyVarObject header
        and the digits. */
-    result = PyObject_Malloc(offsetof(PyLongObject, ob_digit) +
-                             ndigits*sizeof(digit));
+    result = alloc(offsetof(PyLongObject, ob_digit) +
+                   ndigits*sizeof(digit));
     if (!result) {
         PyErr_NoMemory();
         return NULL;
@@ -139,9 +139,16 @@ _PyLong_New(Py_ssize_t size)
     return result;
 }
 
-PyObject *
-_PyLong_Copy(PyLongObject *src)
+PyLongObject *
+_PyLong_New(Py_ssize_t size)
 {
+    return _PyLong_New0(size, PyObject_Malloc);
+}
+
+PyObject *
+_PyLong_Copy0(PyObject *src0, void *(*alloc)(size_t))
+{
+    PyLongObject *src = (PyLongObject *) src0;
     PyLongObject *result;
     Py_ssize_t i;
 
@@ -149,13 +156,13 @@ _PyLong_Copy(PyLongObject *src)
     i = Py_SIZE(src);
     if (i < 0)
         i = -(i);
-    if (i < 2) {
+    if (i < 2 && alloc == PyObject_Malloc) {
         stwodigits ival = medium_value(src);
         if (IS_SMALL_INT(ival)) {
             return get_small_int((sdigit)ival);
         }
     }
-    result = _PyLong_New(i);
+    result = _PyLong_New0(i, alloc);
     if (result != NULL) {
         Py_SET_SIZE(result, Py_SIZE(src));
         while (--i >= 0) {
@@ -251,6 +258,18 @@ _PyLong_Negate(PyLongObject **x_p)
 
     *x_p = (PyLongObject *)_PyLong_FromSTwoDigits(-medium_value(x));
     Py_DECREF(x);
+}
+
+PyObject *
+_PyLong_Copy(PyLongObject *src)
+{
+    return _PyLong_Copy0((PyObject *)src, PyObject_Malloc);
+}
+
+void
+_PyLong_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
+{
+    *target = (void *)_PyLong_Copy0(src0, alloc);
 }
 
 /* Create a new int object from a C long int */
@@ -5780,6 +5799,7 @@ PyTypeObject PyLong_Type = {
     0,                                          /* tp_alloc */
     long_new,                                   /* tp_new */
     PyObject_Del,                               /* tp_free */
+    .tp_move_in = _PyLong_MoveIn,
 };
 
 static PyTypeObject Int_InfoType;

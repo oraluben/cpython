@@ -28,6 +28,7 @@ import _io
 import sys
 import _warnings
 import marshal
+import time
 
 
 _MS_WINDOWS = (sys.platform == 'win32')
@@ -887,7 +888,9 @@ class _LoaderBasics:
 
     def exec_module(self, module):
         """Execute the module."""
+        t0 = time.time()
         code = self.get_code(module.__name__)
+        _cds_verbose('[get_code] ' + module.__name__ + ': ' + str((time.time() - t0) * 1000), 2)
         if code is None:
             raise ImportError('cannot load module {!r} when get_code() '
                               'returns None'.format(module.__name__))
@@ -1438,7 +1441,9 @@ class PathFinder:
         """
         if path is None:
             path = sys.path
+        t0 = time.time()
         spec = cls._get_spec(fullname, path, target)
+        _cds_verbose('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), 2)
         if spec is None:
             return None
         elif spec.loader is None:
@@ -1686,3 +1691,184 @@ def _install(_bootstrap_module):
     supported_loaders = _get_supported_file_loaders()
     sys.path_hooks.extend([FileFinder.path_hook(*supported_loaders)])
     sys.meta_path.append(PathFinder)
+
+    patch_import_paths()
+
+
+def _cds_verbose(msg, verbosity=1):
+    if sys.flags.cds_verbose >= verbosity:
+        print(f'[CDS] {msg}', file=sys.stderr, flush=True)
+
+
+class SharedCodeWrap:
+    shared_code = None  # {name: code}
+    shared_data = None  # {name: (package, file, path)}
+
+    @classmethod
+    def ensure_initialized(cls):
+        if cls.shared_code is None:
+            _cds_verbose('shared_code storage is None, initializing.', 1)
+            cls.shared_code = {}
+        if cls.shared_data is None:
+            _cds_verbose('shared_data storage is None, initializing.', 1)
+            cls.shared_data = {}
+
+    @classmethod
+    def set_module_data(cls, name, package, file, path):
+        cls.ensure_initialized()
+
+        assert name in cls.shared_code, f'{name}, {package}, {file}, {path}'
+        assert name not in cls.shared_data, f'{name}, {package}, {file}, {path}'
+        if path is not None:
+            path = tuple(path)
+
+        cls.shared_data[name] = (package, file, path)
+
+    @classmethod
+    def set_module_code(cls, name, code):
+        cls.ensure_initialized()
+
+        if name in cls.shared_code:
+            # e.g. when import request when lzma is not built.
+            _cds_verbose(f'warning: {name} is re-imported, this might indicates some previous failed import.', 0)
+        assert name not in cls.shared_data, name
+        cls.shared_code[name] = code
+
+    @classmethod
+    def get_shared_module(cls):
+        cls.ensure_initialized()
+
+        return tuple([(k, v) for k, v in {
+            k: (*cls.shared_data[k], cls.shared_code[k])
+            for k in cls.shared_code.keys() & cls.shared_data.keys()
+        }.items()])
+
+
+def patch_import_paths():
+    if sys.flags.cds_mode == 3:
+        sys.meta_path.insert(0, CDSFinder)
+    elif sys.flags.cds_mode == 2:
+        def patch_get_code(orig_get_code):
+            def wrap_get_code(self, name):
+                code = orig_get_code(self, name)
+                if code is not None:
+                    _cds_verbose(f"{self.__class__.__name__}.get_code('{name}') returns code.", 2)
+                    SharedCodeWrap.set_module_code(name, code)
+                else:
+                    _cds_verbose(f"{self.__class__.__name__}.get_code('{name}') returns None.", 2)
+                return code
+
+            return wrap_get_code
+
+        SourceFileLoader.get_code = patch_get_code(SourceLoader.get_code)
+
+        # SourcelessFileLoader.get_code = patch_get_code(SourcelessFileLoader.get_code)
+
+        def patch_exec_module(orig_exec_module):
+            def wrap_exec_module(self, module):
+                # module may override __name__ (e.g. _collections_abc) so we get that before exec_module
+                name = module.__name__
+                _cds_verbose(f"{self.__class__.__name__}.exec_module('{module.__name__}')", 2)
+                orig_exec_module(self, module)
+                SharedCodeWrap.set_module_data(name, *(
+                    getattr(module, i, None) for i in
+                    ('__package__', '__file__', '__path__')
+                ))
+                return module
+
+            return wrap_exec_module
+
+        _LoaderBasics.exec_module = patch_exec_module(_LoaderBasics.exec_module)
+
+        import atexit
+
+        def shm_hook():
+            shared_code = SharedCodeWrap.get_shared_module()
+            if shared_code is not None:
+                _cds_verbose(f'moving in modules: {dict(shared_code).keys()}.', 2)
+                sys.shm_move_in(shared_code)
+                _cds_verbose(f'moving in finished.', 2)
+            else:
+                _cds_verbose('shared_code is None, do not move in.', 2)
+
+        atexit.register(shm_hook)
+    elif sys.flags.cds_mode == 1:
+        def patch_get_code(orig_get_code):
+            def wrap_get_code(self, name):
+                code = orig_get_code(self, name)
+                if code is not None:
+                    _cds_verbose(f"{self.__class__.__name__}.get_code('{name}') returns code.", 2)
+                    sys.shm_trace_import(name)
+                else:
+                    _cds_verbose(f"{self.__class__.__name__}.get_code('{name}') returns None.", 2)
+                return code
+
+            return wrap_get_code
+
+        SourceFileLoader.get_code = patch_get_code(SourceLoader.get_code)
+
+
+class CDSFinder:
+    # class-level cache
+    shared_module: dict = None
+    shared_module_initialized = False
+
+    # Start of importlib.abc.MetaPathFinder interface.
+    @classmethod
+    def find_spec(cls, fullname, path, target=None):
+        if not cls.shared_module_initialized:
+            shared_module = sys.shm_getobj()
+            cls.shared_module_initialized = True
+
+            if not shared_module:
+                return
+            try:
+                cls.shared_module = dict(shared_module)
+            except:
+                _cds_verbose(0, f'parse failed: {shared_module}')
+                return
+        elif (
+                cls.shared_module is None or
+                fullname not in cls.shared_module
+        ):
+            _cds_verbose(f"find_spec missed '{fullname}'", 1)
+            return None
+        t0 = time.time()
+        package, file, path, code = cls.shared_module[fullname]
+        loader = cls(fullname, code)
+        is_package = path is not None
+        spec = _bootstrap.ModuleSpec(fullname, loader, origin=file,
+                                     is_package=is_package)
+        if file:
+            spec.has_location = True
+        if is_package:
+            spec.submodule_search_locations = list(path)
+        _cds_verbose('[find_spec] ' + fullname + ': ' + str((time.time() - t0) * 1000), 2)
+        return spec
+
+    @classmethod
+    def invalidate_caches(cls):
+        pass
+
+    # End of importlib.abc.MetaPathFinder interface.
+
+    # Start of importlib.abc.Loader interface.
+    def __init__(self, fullname, code):
+        self.fullname = fullname
+        self.code = code
+
+    def create_module(self, spec):
+        return None
+
+    def exec_module(self, module):
+        _cds_verbose(f"exec_module cached '{self.fullname}'", 2)
+        _bootstrap._call_with_frames_removed(exec, self.code, module.__dict__)
+    # # Start of importlib.abc.InspectLoader interface.
+    # def get_code(self, fullname):
+    #     print('get_code', file=sys.stderr)
+    # # Start of importlib.abc.ExecutionLoader interface.
+    # def get_source(self, fullname):
+    #     print('get_source', file=sys.stderr)
+    # # End of importlib.abc.ExecutionLoader interface.
+    # # End of importlib.abc.InspectLoader interface.
+    # End of importlib.abc.Loader interface.

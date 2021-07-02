@@ -1035,6 +1035,16 @@ complex_new_impl(PyTypeObject *type, PyObject *r, PyObject *i)
     return complex_subtype_from_doubles(type, cr.real, ci.real);
 }
 
+void
+_PyComplex_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
+{
+    PyComplexObject *op = alloc(_PyObject_SIZE(&PyComplex_Type));
+    PyObject_INIT(op, &PyComplex_Type);
+
+    op->cval = ((PyComplexObject *) src0)->cval;
+    *target = (PyObject *) op;
+}
+
 static PyNumberMethods complex_as_number = {
     (binaryfunc)complex_add,                    /* nb_add */
     (binaryfunc)complex_sub,                    /* nb_subtract */
@@ -1111,4 +1121,5 @@ PyTypeObject PyComplex_Type = {
     PyType_GenericAlloc,                        /* tp_alloc */
     complex_new,                                /* tp_new */
     PyObject_Del,                               /* tp_free */
+    .tp_move_in = _PyComplex_MoveIn,
 };

@@ -845,6 +845,8 @@ done:
     return status;
 }
 
+void *_PyMem_CreateSharedMmap(wchar_t *);
+void *_PyMem_LoadSharedMmap(wchar_t *);
 
 static PyStatus
 pyinit_config(_PyRuntimeState *runtime,
@@ -866,6 +868,16 @@ pyinit_config(_PyRuntimeState *runtime,
     status = pycore_interp_init(tstate);
     if (_PyStatus_EXCEPTION(status)) {
         return status;
+    }
+
+    if (config->cds_mode == 1) {
+        // dump list in _bootstrap_external
+    }
+    else if ((config->cds_mode & 3) == 2) {
+        _PyMem_CreateSharedMmap(config->cds_archive);
+    }
+    else if ((config->cds_mode & 3) == 3) {
+        _PyMem_LoadSharedMmap(config->cds_archive);
     }
 
     /* Only when we get here is the runtime core fully initialized */

@@ -221,6 +221,36 @@ pymain_import_readline(const PyConfig *config)
     }
 }
 
+static int
+pymain_run_cds_dumper(wchar_t *class_list)
+{
+    FILE *fp = _Py_wfopen(class_list, L"rb");
+    if (fp == NULL) {
+        return 1;
+    }
+    int fd = fileno(fp);
+
+    PyObject *pyfile = PyFile_FromFd(fd, "", "r", -1, NULL, NULL, NULL, 1),
+             *sep = PyUnicode_FromString("\n"), *set = PySet_New(NULL), *line;
+
+    for (;;) {
+        line = PyFile_GetLine(pyfile, 0);
+        if (PyUnicode_GetLength(line) > 0) {
+            line = _PyUnicode_XStrip(line, 2, sep);
+            // fixme: directly importing here will lead to some failure.
+            PySet_Add(set, line);
+        }
+        else {
+            break;
+        }
+    }
+
+    for (Py_ssize_t size = PySet_Size(set); size > 0; --size) {
+        PyImport_Import(PySet_Pop(set));
+    }
+
+    return 0;
+}
 
 static int
 pymain_run_command(wchar_t *command)
@@ -574,7 +604,10 @@ pymain_run_python(int *exitcode)
     pymain_header(config);
     pymain_import_readline(config);
 
-    if (config->run_command) {
+    if (config->cds_mode == 2) {
+        *exitcode = pymain_run_cds_dumper(config->cds_name_list);
+    }
+    else if (config->run_command) {
         *exitcode = pymain_run_command(config->run_command);
     }
     else if (config->run_module) {

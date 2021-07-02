@@ -331,6 +331,8 @@ const unsigned char _Py_ascii_whitespace[] = {
 
 /* forward */
 static PyUnicodeObject *_PyUnicode_New(Py_ssize_t length);
+static PyUnicodeObject *_PyUnicode_New0(Py_ssize_t length, void *(*alloc)(size_t));
+PyObject *PyUnicode_New0(Py_ssize_t size, Py_UCS4 maxchar, void *(*alloc)(size_t));
 static PyObject* get_latin1_char(unsigned char ch);
 static int unicode_modifiable(PyObject *unicode);
 
@@ -1176,7 +1178,7 @@ resize_inplace(PyObject *unicode, Py_ssize_t length)
 }
 
 static PyObject*
-resize_copy(PyObject *unicode, Py_ssize_t length)
+resize_copy0(PyObject *unicode, Py_ssize_t length, void *(*alloc)(size_t))
 {
     Py_ssize_t copy_length;
     if (_PyUnicode_KIND(unicode) != PyUnicode_WCHAR_KIND) {
@@ -1184,7 +1186,7 @@ resize_copy(PyObject *unicode, Py_ssize_t length)
 
         assert(PyUnicode_IS_READY(unicode));
 
-        copy = PyUnicode_New(length, PyUnicode_MAX_CHAR_VALUE(unicode));
+        copy = PyUnicode_New0(length, PyUnicode_MAX_CHAR_VALUE(unicode), alloc);
         if (copy == NULL)
             return NULL;
 
@@ -1194,8 +1196,7 @@ resize_copy(PyObject *unicode, Py_ssize_t length)
     }
     else {
         PyObject *w;
-
-        w = (PyObject*)_PyUnicode_New(length);
+        w = (PyObject*)_PyUnicode_New0(length, alloc);
         if (w == NULL)
             return NULL;
         copy_length = _PyUnicode_WSTR_LENGTH(unicode);
@@ -1204,6 +1205,20 @@ resize_copy(PyObject *unicode, Py_ssize_t length)
                   copy_length * sizeof(wchar_t));
         return w;
     }
+}
+
+void
+_PyUnicode_Serialize(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
+{
+    PyObject *op = resize_copy0(src0, PyUnicode_GET_LENGTH(src0), alloc);
+    _PyUnicode_HASH(op) = -1;
+    *target = op;
+}
+
+static PyObject*
+resize_copy(PyObject *unicode, Py_ssize_t length)
+{
+    return resize_copy0(unicode, length, PyObject_Malloc);
 }
 
 /* We allocate one more byte to make sure the string is
@@ -1216,13 +1231,13 @@ resize_copy(PyObject *unicode, Py_ssize_t length)
 */
 
 static PyUnicodeObject *
-_PyUnicode_New(Py_ssize_t length)
+_PyUnicode_New0(Py_ssize_t length, void *(*alloc)(size_t))
 {
     PyUnicodeObject *unicode;
     size_t new_size;
 
     /* Optimization for empty strings */
-    if (length == 0) {
+    if (length == 0 && alloc == PyObject_Malloc) {
         return (PyUnicodeObject *)unicode_new_empty();
     }
 
@@ -1235,10 +1250,8 @@ _PyUnicode_New(Py_ssize_t length)
                         "Negative size passed to _PyUnicode_New");
         return NULL;
     }
-
-    unicode = PyObject_New(PyUnicodeObject, &PyUnicode_Type);
-    if (unicode == NULL)
-        return NULL;
+    unicode = (PyUnicodeObject *) alloc(_PyObject_SIZE(&PyUnicode_Type));
+    PyObject_INIT(unicode, &PyUnicode_Type);
     new_size = sizeof(Py_UNICODE) * ((size_t)length + 1);
 
     _PyUnicode_WSTR_LENGTH(unicode) = length;
@@ -1253,7 +1266,7 @@ _PyUnicode_New(Py_ssize_t length)
     _PyUnicode_UTF8(unicode) = NULL;
     _PyUnicode_UTF8_LENGTH(unicode) = 0;
 
-    _PyUnicode_WSTR(unicode) = (Py_UNICODE*) PyObject_Malloc(new_size);
+    _PyUnicode_WSTR(unicode) = (Py_UNICODE*) alloc(new_size);
     if (!_PyUnicode_WSTR(unicode)) {
         Py_DECREF(unicode);
         PyErr_NoMemory();
@@ -1272,6 +1285,11 @@ _PyUnicode_New(Py_ssize_t length)
 
     assert(_PyUnicode_CheckConsistency((PyObject *)unicode, 0));
     return unicode;
+}
+
+static PyUnicodeObject *_PyUnicode_New(Py_ssize_t length)
+{
+    return _PyUnicode_New0(length, PyObject_Malloc);
 }
 
 static const char*
@@ -1391,10 +1409,10 @@ unicode_create_empty_string_singleton(struct _Py_unicode_state *state)
 
 
 PyObject *
-PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
+PyUnicode_New0(Py_ssize_t size, Py_UCS4 maxchar, void *(*alloc)(size_t))
 {
     /* Optimization for empty strings */
-    if (size == 0) {
+    if (size == 0 && alloc == PyObject_Malloc) {
         return unicode_new_empty();
     }
 
@@ -1450,7 +1468,7 @@ PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
      * PyObject_New() so we are able to allocate space for the object and
      * it's data buffer.
      */
-    obj = (PyObject *) PyObject_Malloc(struct_size + (size + 1) * char_size);
+    obj = (PyObject *) alloc(struct_size + (size + 1) * char_size);
     if (obj == NULL) {
         return PyErr_NoMemory();
     }
@@ -1500,6 +1518,12 @@ PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
 #endif
     assert(_PyUnicode_CheckConsistency((PyObject*)unicode, 0));
     return obj;
+}
+
+PyObject *
+PyUnicode_New(Py_ssize_t size, Py_UCS4 maxchar)
+{
+    return PyUnicode_New0(size, maxchar, PyObject_Malloc);
 }
 
 #if SIZEOF_WCHAR_T == 2
@@ -15436,6 +15460,7 @@ PyTypeObject PyUnicode_Type = {
     0,                            /* tp_alloc */
     unicode_new,                  /* tp_new */
     PyObject_Del,                 /* tp_free */
+    .tp_move_in = _PyUnicode_Serialize,
 };
 
 /* Initialize the Unicode implementation */

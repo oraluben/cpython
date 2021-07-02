@@ -1,0 +1,78 @@
+pipeline {
+    agent {
+        dockerfile {
+            label 'alibaba-ffi-cicd' // reuse this agent
+            filename 'base'
+            dir 'cicd/dockerfiles'
+        }
+    }
+
+    stages {
+        stage('Clean') {
+            steps {
+                sh 'rm -rf *'
+                sh 'git reset --hard'
+            }
+        }
+        stage('Bootstrap') {
+            steps {
+                script {
+                    VERSION_DEF = sh (
+                        script: 'awk "/m4_define\\(PYTHON_VERSION/{print}" configure.ac',
+                        returnStdout: true
+                    ).trim()
+                    println VERSION_DEF
+                    def version = VERSION_DEF =~ /^m4_define\(PYTHON_VERSION, (.+)\)$/
+                    _VER = version[0][1]
+                    _PREFIX = "/opt/alibaba/python${_VER}"
+                }
+                sh "./configure --prefix=${_PREFIX}"
+                sh 'make install -j'
+            }
+        }
+        stage('Build') {
+            steps {
+                sh """
+export PATH=${_PREFIX}/bin:${PATH}
+python3 --version
+
+make clean
+./configure --with-pydebug
+make regen-all -j4
+                """
+                script {
+                    CHANGE = sh (
+                        script: 'git status --porcelain',
+                        returnStdout: true
+                    ).trim()
+                    if (CHANGE) {
+                        echo "${CHANGE}"
+                        error("`regen-all` changed file(s):\n${CHANGE}")
+                    }
+                }
+                sh 'make -j4'
+                sh 'make pythoninfo'
+            }
+        }
+        stage('Test') {
+            steps {
+                // some test failed in Jenkins docker environment.
+                sh 'make test TESTOPTS="-i test_gdb -i test_generators -i test_getpass -i test_multiprocessing_fork -i test_multiprocessing_forkserver -i test_multiprocessing_spawn -i test_pathlib -i test_pdb -i test_posix -i test_posixpath -i test_regrtest -i test_signal -i test_threading -i test_urllib2net"'
+            }
+        }
+        stage('Test ABI') {
+            steps {
+                sh 'make clean'
+                sh './configure --enable-shared'
+                sh 'make check-abidump -j4'
+            }
+        }
+        stage('Dist') {
+            steps {
+                sh "tar -cvjSf python${_VER}.tar.bz2 --owner=0 --group=0 /opt/alibaba/python3.9"
+                archiveArtifacts artifacts: 'python*.tar.bz2', onlyIfSuccessful: true, fingerprint: true
+                sh 'rm *.tar.bz2'
+            }
+        }
+    }
+}
