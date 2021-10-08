@@ -60,16 +60,9 @@ make regen-all -j4
                 sh 'make test TESTOPTS="-i test_gdb -i test_generators -i test_getpass -i test_multiprocessing_fork -i test_multiprocessing_forkserver -i test_multiprocessing_spawn -i test_pathlib -i test_pdb -i test_posix -i test_posixpath -i test_regrtest -i test_signal -i test_threading -i test_urllib2net"'
             }
         }
-        stage('Test ABI') {
-            steps {
-                sh 'make clean'
-                sh './configure --enable-shared'
-                sh 'make check-abidump -j4'
-            }
-        }
         stage('Dist') {
             steps {
-                sh "tar -cvjSf python${_VER}.tar.bz2 --owner=0 --group=0 /opt/alibaba/python3.9"
+                sh "tar -cvjSf python${_VER}.tar.bz2 --owner=0 --group=0 ${_PREFIX}"
                 archiveArtifacts artifacts: 'python*.tar.bz2', onlyIfSuccessful: true, fingerprint: true
                 sh 'rm *.tar.bz2'
             }
