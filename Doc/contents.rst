@@ -17,6 +17,8 @@
    faq/index.rst
    glossary.rst
 
+   cds.rst
+
    about.rst
    bugs.rst
    copyright.rst
