@@ -21,10 +21,15 @@ pipeline {
                         script: 'awk "/m4_define\\(PYTHON_VERSION/{print}" configure.ac',
                         returnStdout: true
                     ).trim()
+                    VERSION_HASH = sh (
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
                     println VERSION_DEF
                     def version = VERSION_DEF =~ /^m4_define\(PYTHON_VERSION, (.+)\)$/
                     _VER = version[0][1]
                     _PREFIX = "/opt/alibaba/python${_VER}"
+                    _ARCHIVE_NAME = "python-${_VER}-${VERSION_HASH}"
                 }
                 sh "./configure --prefix=${_PREFIX}"
                 sh 'make install -j'
@@ -62,7 +67,7 @@ make regen-all -j4
         }
         stage('Dist') {
             steps {
-                sh "tar -cvjSf python${_VER}.tar.bz2 --owner=0 --group=0 ${_PREFIX}"
+                sh "tar -cvjSf ${_ARCHIVE_NAME}.tar.bz2 --owner=0 --group=0 ${_PREFIX}"
                 archiveArtifacts artifacts: 'python*.tar.bz2', onlyIfSuccessful: true, fingerprint: true
                 sh 'rm *.tar.bz2'
             }
