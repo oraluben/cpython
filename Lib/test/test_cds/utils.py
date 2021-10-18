@@ -41,7 +41,7 @@ class CdsTestMixin(UtilMixin):
 
     @staticmethod
     def get_cds_env(mode: CDSMode, archive: str, name_list: str, verbose: int,
-                    random_hash_seed: t.Union[bool, int, str] = False):
+                    random_hash_seed: t.Union[bool, int, str] = True):
         env = os.environ.copy()
         env['__cleanenv'] = True  # signal to assert_python not to do a copy
         # of os.environ on its own

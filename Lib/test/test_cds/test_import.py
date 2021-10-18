@@ -72,6 +72,8 @@ class CdsImportTest(CdsTestMixin, unittest.TestCase):
         self.assert_python_ok(
             '-c', 'import zipfile',
             **self.get_cds_env(CDSMode.DUMP_NAME_LIST, self.TEST_ARCHIVE, self.NAME_LIST, 1))
+        # fixme: PYTHONHASHSEED=0 will trigger a crash here
+        # don't know it's python or CDS's issue.
         out = self.assert_python_ok(
             **self.get_cds_env(CDSMode.DUMP_ARCHIVE_FROM_LIST, self.TEST_ARCHIVE, self.NAME_LIST, 1))
         self.assertIn('lzma is re-imported', out.err.decode())

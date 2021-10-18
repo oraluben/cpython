@@ -14,6 +14,7 @@
 #  include <signal.h>             // SIGINT
 #endif
 #if defined(HAVE_GETPID) && defined(HAVE_UNISTD_H)
+#include <sharedheap.h>
 #  include <unistd.h>             // getpid()
 #endif
 #ifdef MS_WINDOWS
@@ -227,6 +228,7 @@ pymain_run_cds_dumper(wchar_t *class_list)
 {
     FILE *fp = _Py_wfopen(class_list, L"rb");
     if (fp == NULL) {
+        verbose(0, "dumper cannot open class list, aborting...");
         return 1;
     }
     int fd = fileno(fp);
