@@ -248,6 +248,7 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx,
         PyTuple_Type.tp_move_in(PySequence_Tuple(op), target, ctx, alloc);
     }
     else {
+        assert(ty->tp_move_in != FAKE_MOVE_IN);
         ty->tp_move_in(op, target, ctx, alloc);
     }
 }
