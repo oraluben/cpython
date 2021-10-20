@@ -13,6 +13,18 @@
 
 #define USING_MMAP 1
 
+#ifdef MAP_POPULATE
+#define M_POPULATE MAP_POPULATE
+#else
+#define M_POPULATE 0
+#endif
+
+#ifdef Py_DEBUG
+#define CDS_ENABLE_SERIALIZE Py_DEBUG
+#else
+#define CDS_ENABLE_SERIALIZE 0
+#endif
+
 static char *shm;
 struct HeapArchiveHeader *h;
 static int n_alloc;
@@ -81,12 +93,6 @@ _PyMem_CreateSharedMmap(wchar_t *const archive)
 void
 prepare_shared_heap(void);
 
-#ifdef MAP_POPULATE
-#define M_POPULATE MAP_POPULATE
-#else
-#define M_POPULATE 0
-#endif
-
 void *
 _PyMem_LoadSharedMmap(wchar_t *const archive)
 {
@@ -144,6 +150,16 @@ fail:
     return NULL;
 }
 
+#if CDS_ENABLE_SERIALIZE
+typedef struct _heaparchivedsetitem {
+    PyObject *item;
+    struct _heaparchivedsetitem *next;
+} HeapArchivedSetItem;
+typedef struct _heaparchivedset {
+    HeapArchivedSetItem *head;
+} HeapArchivedSet;
+#endif
+
 void
 prepare_shared_heap(void)
 {
@@ -151,11 +167,10 @@ prepare_shared_heap(void)
     if (h->none_addr) {
         shift = (void *)Py_None - (void *)h->none_addr;
     }
-    patch_pyobject(&h->obj, shift, false);
+    patch_pyobject(&h->obj);
     t2 = nanoTime();
 
-    // currently, no serialization is needed
-    assert(h->serialized_count == 0);
+#if CDS_ENABLE_SERIALIZE
     // reverse order to make sure leaf objects get deserialized first.
     for (int i = h->serialized_count - 1; i >= 0; --i) {
         HeapSerializedObject *serialized = &h->serialized_array[i];
@@ -163,11 +178,24 @@ prepare_shared_heap(void)
         assert(*serialized->archive_addr_to_patch == NULL);
         PyTypeObject *ty = UNSHIFT(serialized->ty, shift, PyTypeObject);
         verbose(0, "deserializing: %s", ty->tp_name);
-        //        assert(ty->tp_patch);
-        //        PyObject *real = ty->tp_patch(serialized->obj, shift);
-        //        assert(real != NULL);
-        //        *((PyObject **)serialized->archive_addr_to_patch) = real;
+        PyObject *real;
+        if (ty == &PyFrozenSet_Type) {
+            real = PyFrozenSet_New(NULL);
+
+            HeapArchivedSet *archived_set = (HeapArchivedSet *)serialized->obj;
+            HeapArchivedSetItem *item = archived_set->head;
+            while (item != NULL) {
+                patch_pyobject(&item->item);
+                PySet_Add(real, item->item);
+                item = item->next;
+            }
+        }
+        assert(real != NULL);
+        *((PyObject **)serialized->archive_addr_to_patch) = real;
     }
+#else
+    assert(h->serialized_count == 0);
+#endif
 }
 
 static void *
@@ -234,17 +262,18 @@ _PyMem_IsShared(void *ptr)
 
 /* todo: The semantic is not straight forward, add detail doc. */
 void
-patch_pyobject(PyObject **ref, long shift, bool not_serialization)
+patch_pyobject(PyObject **ref)
 {
     if (FAST_PATCH && shift == 0)
         return;
     PyObject *op = *ref;
     if (op == NULL) {
-        // deserialize later
+        // This field is NULL or
+        // (when serialization is enabled) to be deserialized later
         return;
     }
-    else if (op == h->none_addr || op == h->true_addr || op == h->false_addr ||
-             op == h->ellipsis_addr) {
+    if (op == h->none_addr || op == h->true_addr || op == h->false_addr ||
+        op == h->ellipsis_addr) {
         *ref = UNSHIFT(op, shift, PyObject);
         return;
     }
@@ -261,16 +290,16 @@ patch_pyobject(PyObject **ref, long shift, bool not_serialization)
             Py_SET_TYPE(op, &PyTuple_Type);
             PyTupleObject *tuple_op = (PyTupleObject *)op;
             for (Py_ssize_t i = Py_SIZE(tuple_op); --i >= 0;) {
-                patch_pyobject(&tuple_op->ob_item[i], shift, false);
+                patch_pyobject(&tuple_op->ob_item[i]);
             }
         }
         else if (ty == &PyCode_Type) {
             Py_SET_TYPE(op, &PyCode_Type);
             PyCodeObject *code_op = (PyCodeObject *)op;
 #define SIMPLE_HANDLER(field)
-#define SERIALIZE_HANDLER(field)                       \
-    do {                                               \
-        patch_pyobject(&code_op->field, shift, false); \
+#define SERIALIZE_HANDLER(field)         \
+    do {                                 \
+        patch_pyobject(&code_op->field); \
     } while (0)
 
             UNWIND_CODE_FIELDS
@@ -285,8 +314,7 @@ patch_pyobject(PyObject **ref, long shift, bool not_serialization)
 }
 
 void
-move_in(PyObject *op, PyObject **target, MoveInContext *ctx,
-        void *(*alloc)(size_t))
+move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
 {
     *target = NULL;
     if (op == NULL) {
@@ -329,9 +357,51 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx,
         SIMPLE_MOVE_IN(PyFloatObject, &PyFloat_Type,
                        { res->ob_fval = ((PyFloatObject *)op)->ob_fval; })
     }
+#if CDS_ENABLE_SERIALIZE
+    // this is an example to show how serialization works
+    // and is not intended for production
+    else if (ty == &PyFrozenSet_Type) {
+        PySetObject *from_set = (PySetObject *)op;
+        assert(!from_set->weakreflist);
+
+        Py_ssize_t pos = 0;
+
+        HeapArchivedSetItem *head = NULL, *prev, *cur;
+        PyObject *key;
+        Py_hash_t ignore_hash;
+        while (_PySet_NextEntry(op, &pos, &key, &ignore_hash)) {
+            prev = cur;
+            cur = _PyMem_SharedMalloc(sizeof(HeapArchivedSetItem));
+            if (head == NULL) {
+                head = cur;
+            }
+            else if (prev != NULL) {
+                prev->next = cur;
+            }
+
+            move_in(key, &cur->item, ctx);
+        }
+
+        HeapArchivedSet *archived_set =
+            _PyMem_SharedMalloc(sizeof(HeapArchivedSet));
+
+        archived_set->head = head;
+
+        MoveInItem *item = malloc(sizeof(MoveInItem));
+
+        item->archive_addr_to_patch = target;
+        item->obj = archived_set;
+        item->ty = &PyFrozenSet_Type;
+        item->next = ((MoveInContext *)ctx)->header;
+
+        ((MoveInContext *)ctx)->size++;
+        ((MoveInContext *)ctx)->header = item;
+
+        *target = NULL;
+    }
+#endif
     else if (ty == &PyTuple_Type || ty == &PyFrozenSet_Type) {
         // PyTuple_New starts
-
         PyTupleObject *res;
         PyTupleObject *src;
         if (ty != &PyTuple_Type)
@@ -350,8 +420,7 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx,
         res = (PyTupleObject *)var;
 
         for (Py_ssize_t i = 0; i < nitems; i++) {
-            move_in(src->ob_item[i], &res->ob_item[i], ctx,
-                    _PyMem_SharedMalloc);
+            move_in(src->ob_item[i], &res->ob_item[i], ctx);
         }
         PyObject_GC_UnTrack(res);
 
@@ -484,9 +553,9 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx,
     do {                         \
         res->field = src->field; \
     } while (0)
-#define SERIALIZE_HANDLER(field)                      \
-    do {                                              \
-        move_in(src->field, &res->field, ctx, alloc); \
+#define SERIALIZE_HANDLER(field)               \
+    do {                                       \
+        move_in(src->field, &res->field, ctx); \
     } while (0)
 
         UNWIND_CODE_FIELDS
@@ -523,8 +592,9 @@ _PyMem_SharedMoveIn(PyObject *o)
     MoveInContext ctx;
     ctx.size = 0;
     ctx.header = NULL;
-    move_in(o, &h->obj, &ctx, _PyMem_SharedMalloc);
+    move_in(o, &h->obj, &ctx);
 
+#if CDS_ENABLE_SERIALIZE
     if (ctx.size > 0) {
         h->serialized_count = ctx.size;
         h->serialized_array =
@@ -539,6 +609,9 @@ _PyMem_SharedMoveIn(PyObject *o)
             h->serialized_array[idx].ty = ctx.header->ty;
         }
     }
+#else
+    assert(ctx.size == 0);
+#endif
 
     dumped = true;
     ftruncate(fd, h->used);

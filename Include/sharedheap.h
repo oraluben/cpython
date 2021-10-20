@@ -47,9 +47,9 @@ struct HeapArchiveHeader {
 };
 
 void
-move_in(PyObject *, PyObject **, MoveInContext *, void *(*alloc)(size_t));
+move_in(PyObject *, PyObject **, MoveInContext *);
 void
-patch_pyobject(PyObject **, long, bool);
+patch_pyobject(PyObject **);
 
 void
 _PyMem_SharedMoveIn(PyObject *o);
