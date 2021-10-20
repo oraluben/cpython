@@ -10,7 +10,6 @@
 #include "pycore_tuple.h"         // _PyTuple_ITEMS()
 #include "clinic/codeobject.c.h"
 
-#include "sharedheap.h"
 
 /******************
  * generic helpers
@@ -533,96 +532,6 @@ error:
     Py_XDECREF(localsplusnames);
     Py_XDECREF(localspluskinds);
     return co;
-}
-
-#define UNWIND_CODE_FIELDS                 \
-    SERIALIZE_HANDLER(co_consts);          \
-    SERIALIZE_HANDLER(co_names);           \
-    SERIALIZE_HANDLER(co_code);            \
-    SERIALIZE_HANDLER(co_exceptiontable);  \
-                                           \
-    SIMPLE_HANDLER(co_flags);              \
-    SIMPLE_HANDLER(co_warmup);             \
-                                           \
-    SIMPLE_HANDLER(co_argcount);           \
-    SIMPLE_HANDLER(co_posonlyargcount);    \
-    SIMPLE_HANDLER(co_kwonlyargcount);     \
-    SIMPLE_HANDLER(co_stacksize);          \
-    SIMPLE_HANDLER(co_flags);              \
-    SIMPLE_HANDLER(co_firstlineno);        \
-                                           \
-    SERIALIZE_HANDLER(co_localsplusnames); \
-    SERIALIZE_HANDLER(co_localspluskinds); \
-    SERIALIZE_HANDLER(co_filename);        \
-    SERIALIZE_HANDLER(co_name);            \
-    SERIALIZE_HANDLER(co_qualname);        \
-    SERIALIZE_HANDLER(co_linetable);       \
-    SERIALIZE_HANDLER(co_endlinetable);    \
-    SERIALIZE_HANDLER(co_columntable);     \
-                                           \
-    SIMPLE_HANDLER(co_nlocalsplus);        \
-    SIMPLE_HANDLER(co_nlocals);            \
-    SIMPLE_HANDLER(co_nplaincellvars);     \
-    SIMPLE_HANDLER(co_ncellvars);          \
-    SIMPLE_HANDLER(co_nfreevars);          \
-                                           \
-    SERIALIZE_HANDLER(co_varnames);        \
-    SERIALIZE_HANDLER(co_freevars);        \
-    SERIALIZE_HANDLER(co_cellvars);
-
-void
-_PyCode_MoveIn(PyObject *src0, PyObject **target, void *ctx,
-               void *(*alloc)(size_t))
-{
-    PyCodeObject *fromCo = (PyCodeObject *)src0;
-
-    PyCodeObject *co = (PyCodeObject *)alloc(_PyObject_SIZE(&PyCode_Type));
-    PyObject_INIT(co, &PyCode_Type);
-
-#define SIMPLE_HANDLER(field)      \
-    do {                           \
-        co->field = fromCo->field; \
-    } while (0)
-#define SERIALIZE_HANDLER(field)                        \
-    do {                                                \
-        move_in(fromCo->field, &co->field, ctx, alloc); \
-    } while (0)
-
-    UNWIND_CODE_FIELDS
-
-#undef SERIALIZE_HANDLER
-#undef SIMPLE_HANDLER
-
-    co->co_firstinstr = (_Py_CODEUNIT *)PyBytes_AS_STRING(co->co_code);
-
-    co->co_weakreflist = NULL;
-    co->co_extra = NULL;
-    co->co_quickened = NULL;
-
-    *target = (PyObject *)co;
-    PyObject_GC_UnTrack(*target);
-}
-
-PyObject *
-_PyCode_Patch(void *p, long shift)
-{
-    PyObject *op = *((PyObject **)p);
-    if (shift)
-        Py_SET_TYPE(op, &PyCode_Type);
-    PyCodeObject *co = (PyCodeObject *)op;
-
-#define SIMPLE_HANDLER(field)
-#define SERIALIZE_HANDLER(field)                  \
-    do {                                          \
-        patch_pyobject(&co->field, shift, false); \
-    } while (0)
-
-    UNWIND_CODE_FIELDS
-
-#undef SERIALIZE_HANDLER
-#undef SIMPLE_HANDLER
-
-    return NULL;
 }
 
 PyCodeObject *
@@ -1861,8 +1770,6 @@ PyTypeObject PyCode_Type = {
     0,                                  /* tp_init */
     0,                                  /* tp_alloc */
     code_new,                           /* tp_new */
-    .tp_move_in = _PyCode_MoveIn,
-    .tp_patch = _PyCode_Patch,
 };
 
 

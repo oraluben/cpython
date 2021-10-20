@@ -35,8 +35,6 @@
 #include "pycore_object.h"        // _PyObject_GC_UNTRACK()
 #include <stddef.h>               // offsetof()
 
-#include "sharedheap.h"
-
 /* Object used as dummy key to fill deleted entries */
 static PyObject _dummy_struct;
 
@@ -978,14 +976,6 @@ make_new_set(PyTypeObject *type, PyObject *iterable)
 
     return (PyObject *)so;
 }
-
-typedef struct _heaparchivedsetitem {
-    PyObject *item;
-    struct _heaparchivedsetitem *next;
-} HeapArchivedSetItem;
-typedef struct _heaparchivedset {
-    HeapArchivedSetItem *head;
-} HeapArchivedSet;
 
 static PyObject *
 make_new_set_basetype(PyTypeObject *type, PyObject *iterable)
@@ -2244,7 +2234,6 @@ PyTypeObject PyFrozenSet_Type = {
     frozenset_new,                      /* tp_new */
     PyObject_GC_Del,                    /* tp_free */
     .tp_vectorcall = frozenset_vectorcall,
-    .tp_move_in = FAKE_MOVE_IN, // should not be reached
 };
 
 

@@ -1069,11 +1069,6 @@ static PyObject *
 sys_shm_move_in(PyObject *module, PyObject *arg)
 /*[clinic end generated code: output=13056f8010423627 input=194e8a5d9af07543]*/
 {
-    if (!Py_TYPE(arg)->tp_move_in) {
-        _PyArg_BadArgument("move_in", "argument", "serializable", arg);
-        return NULL;
-    }
-
     _PyMem_SharedMoveIn(arg);
 
     return Py_None;

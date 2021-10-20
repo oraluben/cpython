@@ -1698,12 +1698,6 @@ static PyNumberMethods none_as_number = {
     0,                          /* nb_index */
 };
 
-void
-_PyNone_MoveIn(PyObject *src0, PyObject **target, void* ctx, void *(*alloc)(size_t))
-{
-    *target = src0;
-}
-
 PyTypeObject _PyNone_Type = {
     PyVarObject_HEAD_INIT(&PyType_Type, 0)
     "NoneType",
@@ -1743,7 +1737,6 @@ PyTypeObject _PyNone_Type = {
     0,                  /*tp_init */
     0,                  /*tp_alloc */
     none_new,           /*tp_new */
-    .tp_move_in = _PyNone_MoveIn,
 };
 
 PyObject _Py_NoneStruct = {

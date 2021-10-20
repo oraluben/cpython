@@ -55,14 +55,6 @@ bool_new(PyTypeObject *type, PyObject *args, PyObject *kwds)
     return PyBool_FromLong(ok);
 }
 
-void
-_PyBool_MoveIn(PyObject *src0, PyObject **target, void *ctx,
-               void *(*alloc)(size_t))
-{
-    assert(src0 == Py_True || src0 == Py_False);
-    *target = src0;
-}
-
 static PyObject *
 bool_vectorcall(PyObject *type, PyObject * const*args,
                 size_t nargsf, PyObject *kwnames)
@@ -209,7 +201,6 @@ PyTypeObject PyBool_Type = {
     0,                                          /* tp_alloc */
     bool_new,                                   /* tp_new */
     .tp_vectorcall = bool_vectorcall,
-    .tp_move_in = _PyBool_MoveIn,
 };
 
 /* The objects representing bool values False and True */

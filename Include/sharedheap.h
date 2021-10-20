@@ -4,8 +4,6 @@
 #define CDS_MAX_IMG_SIZE (1024 * 1024 * 1024)
 #define CDS_REQUESTING_ADDR ((void *)0x280000000L)
 
-#define FAKE_MOVE_IN ((archivemoveinfunc) 1)
-
 #include <stdbool.h>
 
 #include "Python.h"
