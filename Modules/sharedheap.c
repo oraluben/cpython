@@ -9,6 +9,8 @@
 #include <sys/mman.h>
 #include <unistd.h>
 
+#include <pycore_gc.h>
+
 #define USING_MMAP 1
 
 static char *shm;
@@ -207,12 +209,17 @@ _PyMem_SharedMalloc(size_t size)
     n_alloc++;
     if (!size)
         size = 1;
+    // Extra memory for PyGC_Head,
+    // otherwise previous object will be overwritten by GC
+    h->used += sizeof(PyGC_Head);
     size_t size_aligned = ALIEN_TO(size, 8);
     void *res = shm + h->used;
     if ((h->used += size_aligned) > CDS_MAX_IMG_SIZE) {
+        h->used -= sizeof(PyGC_Head);
         h->used -= size_aligned;
         return NULL;
     }
+    verbose(2, "SharedMalloc: [%p, %p)", res, (shm + h->used));
     return res;
 }
 

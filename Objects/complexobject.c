@@ -1045,6 +1045,7 @@ _PyComplex_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(s
 
     op->cval = ((PyComplexObject *) src0)->cval;
     *target = (PyObject *) op;
+    PyObject_GC_UnTrack(*target);
 }
 
 static PyNumberMethods complex_as_number = {

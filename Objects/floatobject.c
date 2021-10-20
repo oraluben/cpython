@@ -238,6 +238,7 @@ _PyFloat_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(siz
 
     op->ob_fval = ((PyFloatObject *) src0)->ob_fval;
     *target = (PyObject *) op;
+    PyObject_GC_UnTrack(*target);
 }
 
 static void

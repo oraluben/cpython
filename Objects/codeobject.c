@@ -600,6 +600,7 @@ _PyCode_MoveIn(PyObject *src0, PyObject **target, void *ctx,
     co->co_quickened = NULL;
 
     *target = (PyObject *)co;
+    PyObject_GC_UnTrack(*target);
 }
 
 PyObject *

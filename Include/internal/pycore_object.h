@@ -162,7 +162,7 @@ _PyObject_GET_WEAKREFS_LISTPTR(PyObject *op)
 static inline int
 _PyObject_IS_GC(PyObject *obj)
 {
-    return ((!_PyMem_IsShared(obj)) && PyType_IS_GC(Py_TYPE(obj))
+    return (PyType_IS_GC(Py_TYPE(obj))
             && (Py_TYPE(obj)->tp_is_gc == NULL
                 || Py_TYPE(obj)->tp_is_gc(obj)));
 }

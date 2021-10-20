@@ -270,6 +270,7 @@ void
 _PyLong_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(size_t))
 {
     *target = (void *)_PyLong_Copy0(src0, alloc);
+    PyObject_GC_UnTrack(*target);
 }
 
 /* Create a new int object from a C long int */

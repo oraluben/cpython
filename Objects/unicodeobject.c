@@ -1213,6 +1213,7 @@ _PyUnicode_Serialize(PyObject *src0, PyObject **target, void *ctx, void *(*alloc
     PyObject *op = resize_copy0(src0, PyUnicode_GET_LENGTH(src0), alloc);
     _PyUnicode_HASH(op) = -1;
     *target = op;
+    PyObject_GC_UnTrack(*target);
 }
 
 static PyObject*

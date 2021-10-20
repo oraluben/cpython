@@ -252,6 +252,7 @@ _PyBytes_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(siz
     memcpy(op->ob_sval, fromOp->ob_sval, sz + 1);
 
     *target = (PyObject *)op;
+    PyObject_GC_UnTrack(*target);
 }
 
 PyObject *

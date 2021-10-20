@@ -716,6 +716,7 @@ _PyTuple_MoveIn(PyObject *src0, PyObject **target, void *ctx, void *(*alloc)(siz
         move_in(elem, &op->ob_item[i], ctx, alloc);
     }
     *target = (PyObject *)op;
+    PyObject_GC_UnTrack(*target);
 }
 
 PyObject *
