@@ -178,7 +178,7 @@ prepare_shared_heap(void)
         assert(*serialized->archive_addr_to_patch == NULL);
         PyTypeObject *ty = UNSHIFT(serialized->ty, shift, PyTypeObject);
         verbose(0, "deserializing: %s", ty->tp_name);
-        PyObject *real;
+        PyObject *real = NULL;
         if (ty == &PyFrozenSet_Type) {
             real = PyFrozenSet_New(NULL);
 
@@ -324,6 +324,14 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
 
     verbose(2, "move %s@%p into %p", op->ob_type->tp_name, op, target);
 
+#define UNTRACK(obj)                \
+    do {                            \
+        /* Extra refcnt to          \
+         * avoid `tp_dealloc` */    \
+        Py_SET_REFCNT((obj), 1);    \
+        PyObject_GC_UnTrack((obj)); \
+    } while (0)
+
 #define SIMPLE_MOVE_IN(obj_type, type, copy)                   \
     obj_type *res = _PyMem_SharedMalloc(_PyObject_SIZE(type)); \
     PyObject_INIT(res, type);                                  \
@@ -331,7 +339,7 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
         copy                                                   \
     } while (0);                                               \
     *target = (PyObject *)res;                                 \
-    PyObject_GC_UnTrack(*target);
+    UNTRACK(*target);
 
     if (ty == &PyBool_Type || ty == &_PyNone_Type || ty == &PyEllipsis_Type) {
         *target = op;
@@ -347,7 +355,7 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
         memcpy(res->ob_sval, ((PyBytesObject *)op)->ob_sval, size + 1);
 
         *target = (PyObject *)res;
-        PyObject_GC_UnTrack(*target);
+        UNTRACK(*target);
     }
     else if (ty == &PyComplex_Type) {
         SIMPLE_MOVE_IN(PyComplexObject, &PyComplex_Type,
@@ -422,9 +430,8 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
         for (Py_ssize_t i = 0; i < nitems; i++) {
             move_in(src->ob_item[i], &res->ob_item[i], ctx);
         }
-        PyObject_GC_UnTrack(res);
-
         *target = (PyObject *)res;
+        UNTRACK(*target);
     }
     else if (ty == &PyLong_Type) {
         // _PyLong_Copy starts
@@ -444,9 +451,8 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
         }
         // _PyLong_Copy ends
 
-        PyObject_GC_UnTrack(res);
-
         *target = (PyObject *)res;
+        UNTRACK(*target);
     }
     else if (ty == &PyUnicode_Type) {
         // basically copied from unicodeobject.c, todo: optimize
@@ -540,7 +546,7 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
         // _PyUnicode_Copy ends
 
         *target = (PyObject *)res;
-        PyObject_GC_UnTrack(*target);
+        UNTRACK(*target);
     }
     else if (ty == &PyCode_Type) {
         PyCodeObject *src = (PyCodeObject *)op;
@@ -570,7 +576,7 @@ move_in(PyObject *op, PyObject **target, MoveInContext *ctx)
         res->co_quickened = NULL;
 
         *target = (PyObject *)res;
-        PyObject_GC_UnTrack(*target);
+        UNTRACK(*target);
     }
     else {
         assert(false);  // should not reach here
