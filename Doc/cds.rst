@@ -173,11 +173,11 @@ Simple Usage
 
 Behavior of CDS are controlled by several environment variables.
 
-PYCDSMODE={DUMP,SHARE}
-PYCDSARCHIVE
-PYCDSLIST
+1. Run a normal python program as tracer with :code:`PYDUMPMODULELIST=<class list> python <orig args>`
+2. Dump class archive with :code:`PYCDSMODE=DUMP PYCDSLIST=<class list> PYCDSARCHIVE=<class archive> python`
+3. Run python program and trying to load from class archive with :code:`PYCDSMODE=SHARE PYCDSARCHIVE=<class archive> python <orig args>`
 
-PYCDSVERBOSE
+:code:`PYCDSVERBOSE={0,1,2}` can show detailed CDS log.
 
 Internal APIs
 -------------
