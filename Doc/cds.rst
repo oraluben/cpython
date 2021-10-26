@@ -184,22 +184,6 @@ Internal APIs
 :code:`sys.shm_move_in`
 :code:`sys.shm_getobj`
 
-Dev Guide
-==========
-
-CDS for Python adds additional to :code:`PyTypeObject`
-and breaks ABI compatibility.
-
-As a side effect,
-test :code:`make check-abidump` will fail.
-If we do want to run the test,
-the following command can generate correct ABI information to test against.
-
-::
-
-    apt-get install abigail-tools
-    make regen-abidump
-
 Related Projects
 ================
 
