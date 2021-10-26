@@ -74,14 +74,21 @@ Memory layout of archive and mmap region::
    +-0x0-|-0x4-|-0x8-|-0xa-+------------ <- 0x280000000
    | (1) | (2) | (3) | (4) |
    | (5) | (6) | (7) | (8) |
+   | (9) |                 |
    +-----------------------+
-   :          (9)          :
-   +-----------------------+
-   :          (10)         :
+   :          (a)          :
    +-----------------------+
 
    # (1): mmap address for runtime verification, is supposed to be 0x280000000;
-   # (2): address of :c:data:`Py_None`;
+   # (2) - (5): address of :c:data:`Py_None`, :c:data:`Py_True`, :c:data:`Py_False`, :c:data:`Py_Ellipsis`, respectively;
+   # (6): size of archive;
+   # (7): pointer-in-archive of shared object;
+   # (8): size of serialized objects;
+   # (9): header serialized objects;
+   # (a): object storage.
+
+   * Serialization is disabled by default
+
 
 To support sharing code object of python modules,
 a subset of python objects is sufficient.
@@ -102,7 +109,21 @@ and instances of
 :class:`str` (:c:type:`PyUnicodeObject`),
 are necessary to store code object of python modules.
 
-Two extra fields has been added to :c:type:`PyTypeObject`.
+Pointer of constants will be copied as-is
+and updated by loader process.
+Instances will be deep-copied to archive.
+Special cases are hashable objects (:class:`str`/:class:`bytes`, :class:`tuple`)
+and container based on hash of objects (:class:`frozenset`, and :class:`dict` which we don't plan to support for now).
+
+For hashable objects,
+we set their hash to "not set" in archive,
+and Python will rehash them on demand.
+
+For containers
+whose object layout relies on hashes of stored objects,
+we can either convert them to tuples,
+or use a serialization mechanism (see :c:macro:`CDS_ENABLE_SERIALIZE`)
+to support their in-archive storage.
 
 Functions
 ---------
