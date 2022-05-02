@@ -342,6 +342,8 @@ typedef struct {
     int legacy_windows_stdio;
 #endif
 
+    int lazy_imports;   /* PYTHONLAZYIMPORTS, -L */
+
     /* Value of the --check-hash-based-pycs command line option:
 
        - "default" means the 'check_source' flag in hash-based pycs

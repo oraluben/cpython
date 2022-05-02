@@ -89,6 +89,19 @@ typedef struct {
 PyAPI_FUNC(PyObject *) _PyDictView_New(PyObject *, PyTypeObject *);
 PyAPI_FUNC(PyObject *) _PyDictView_Intersect(PyObject* self, PyObject *other);
 
+PyObject *_PyDict_GetAttrItem(PyObject *op, PyObject *key);
+
+/* Return 1 if the given dict has deferred objects, or 0 otherwise. */
+int _PyDict_HasDeferredObjects(PyObject *);
+
+/* Flag dictionary as having deferred objects in it */
+void _PyDict_SetHasDeferredObjects(PyObject *);
+
+/* Unflag dictionary as having deferred objects in it */
+void _PyDict_UnsetHasDeferredObjects(PyObject *);
+
+int _PyDict_LoadDeferred(PyDictObject *, int);
+
 #ifdef __cplusplus
 }
 #endif

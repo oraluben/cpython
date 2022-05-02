@@ -62,6 +62,7 @@ static const char usage_3[] = "\
          when given twice, print more information about the build\n\
 -W arg : warning control; arg is action:message:category:module:lineno\n\
          also PYTHONWARNINGS=arg\n\
+-L     : enable lazy imports by default\n\
 -x     : skip first line of source, allowing use of non-Unix forms of #!cmd\n\
 -X opt : set implementation-specific option. The following options are available:\n\
 \n\
@@ -128,7 +129,8 @@ static const char usage_6[] =
 "PYTHONBREAKPOINT: if this variable is set to 0, it disables the default\n"
 "   debugger. It can be set to the callable of your debugger of choice.\n"
 "PYTHONDEVMODE: enable the development mode.\n"
-"PYTHONPYCACHEPREFIX: root directory for bytecode cache (pyc) files.\n";
+"PYTHONPYCACHEPREFIX: root directory for bytecode cache (pyc) files.\n"
+"PYTHONLAZYIMPORTS: enable lazy imports by default.\n";
 
 #if defined(MS_WINDOWS)
 #  define PYTHONHOMEHELP "<prefix>\\python{major}{minor}"
@@ -157,6 +159,7 @@ int Py_NoUserSiteDirectory = 0; /* for -s and site.py */
 int Py_UnbufferedStdioFlag = 0; /* Unbuffered binary std{in,out,err} */
 int Py_HashRandomizationFlag = 0; /* for -R and PYTHONHASHSEED */
 int Py_IsolatedFlag = 0; /* for -I, isolate from user's env */
+int Py_LazyImportsFlag = 0; /* Needed by ceval.c */
 #ifdef MS_WINDOWS
 int Py_LegacyWindowsFSEncodingFlag = 0; /* Uses mbcs instead of utf-8 */
 int Py_LegacyWindowsStdioFlag = 0; /* Uses FileIO instead of WindowsConsoleIO */
@@ -216,6 +219,7 @@ _Py_GetGlobalVariablesAsDict(void)
     SET_ITEM_INT(Py_UnbufferedStdioFlag);
     SET_ITEM_INT(Py_HashRandomizationFlag);
     SET_ITEM_INT(Py_IsolatedFlag);
+    SET_ITEM_INT(Py_LazyImportsFlag);
 
 #ifdef MS_WINDOWS
     SET_ITEM_INT(Py_LegacyWindowsFSEncodingFlag);
@@ -839,6 +843,7 @@ _PyConfig_Copy(PyConfig *config, const PyConfig *config2)
     COPY_WSTR_ATTR(filesystem_errors);
     COPY_WSTR_ATTR(stdio_encoding);
     COPY_WSTR_ATTR(stdio_errors);
+    COPY_ATTR(lazy_imports);
 #ifdef MS_WINDOWS
     COPY_ATTR(legacy_windows_stdio);
 #endif
@@ -937,6 +942,7 @@ config_as_dict(const PyConfig *config)
     SET_ITEM_INT(buffered_stdio);
     SET_ITEM_WSTR(stdio_encoding);
     SET_ITEM_WSTR(stdio_errors);
+    SET_ITEM_INT(lazy_imports);
 #ifdef MS_WINDOWS
     SET_ITEM_INT(legacy_windows_stdio);
 #endif
@@ -1038,6 +1044,7 @@ config_get_global_vars(PyConfig *config)
     COPY_FLAG(parser_debug, Py_DebugFlag);
     COPY_FLAG(verbose, Py_VerboseFlag);
     COPY_FLAG(quiet, Py_QuietFlag);
+    COPY_FLAG(lazy_imports, Py_LazyImportsFlag);
 #ifdef MS_WINDOWS
     COPY_FLAG(legacy_windows_stdio, Py_LegacyWindowsStdioFlag);
 #endif
@@ -1075,6 +1082,7 @@ config_set_global_vars(const PyConfig *config)
     COPY_FLAG(parser_debug, Py_DebugFlag);
     COPY_FLAG(verbose, Py_VerboseFlag);
     COPY_FLAG(quiet, Py_QuietFlag);
+    COPY_FLAG(lazy_imports, Py_LazyImportsFlag);
 #ifdef MS_WINDOWS
     COPY_FLAG(legacy_windows_stdio, Py_LegacyWindowsStdioFlag);
 #endif
@@ -1293,6 +1301,7 @@ config_read_env_vars(PyConfig *config)
     _Py_get_env_flag(use_env, &config->verbose, "PYTHONVERBOSE");
     _Py_get_env_flag(use_env, &config->optimization_level, "PYTHONOPTIMIZE");
     _Py_get_env_flag(use_env, &config->inspect, "PYTHONINSPECT");
+    _Py_get_env_flag(use_env, &config->lazy_imports, "PYTHONLAZYIMPORTS");
 
     int dont_write_bytecode = 0;
     _Py_get_env_flag(use_env, &dont_write_bytecode, "PYTHONDONTWRITEBYTECODE");
@@ -2009,6 +2018,10 @@ config_parse_cmdline(PyConfig *config, PyWideStringList *warnoptions,
 
         case 'R':
             config->use_hash_seed = 0;
+            break;
+
+        case 'L':
+            config->lazy_imports = 1;
             break;
 
         /* This space reserved for other options */
