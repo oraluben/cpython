@@ -153,7 +153,8 @@ struct _gc_runtime_state {
     int debug;
     /* linked lists of container objects */
     struct gc_generation young;
-    struct gc_generation old[2];
+    struct gc_generation old[NUM_GENERATIONS-1];
+    PyGC_Head *orig_ignore_generation0;
     /* a permanent generation which won't be collected */
     struct gc_generation permanent_generation;
     struct gc_generation_stats generation_stats[NUM_GENERATIONS];
@@ -166,7 +167,7 @@ struct _gc_runtime_state {
 
     Py_ssize_t work_to_do;
     /* Which of the old spaces is the visited space */
-    int visited_space;
+    Py_ssize_t visited_space;
 };
 
 extern void _PyGC_InitState(struct _gc_runtime_state *);
